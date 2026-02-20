@@ -1,6 +1,0 @@
-[submodule "lib/pugixml"]  
-	path = lib/pugixml  
-	url = https://github.com/zeux/pugixml.git  
-[submodule "lib/updfparser"]  
-	path = lib/updfparser  
-	url = https://github.com/SamuelMarks/updfparser.git  
