@@ -195,13 +195,84 @@
             color: #78909c;
             margin-left: 0.5rem;
         }
-        #confirm-section, #progress-section { display: none; }
-        #confirm-section, #progress-section {
+        #confirm-section, #progress-section, #done-section { display: none; }
+        #confirm-section, #progress-section, #done-section {
             background: #fff;
             border-radius: 12px;
             padding: 1.5rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             margin-bottom: 2rem;
+        }
+        .done-title {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.4rem;
+        }
+        .done-title h3 { margin: 0; color: #2e7d32; }
+        .done-subtitle { color: #546e7a; margin-bottom: 1.5rem; font-size: 0.95rem; }
+        .done-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .btn-dl-pdf {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.4rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-decoration: none;
+            color: #fff;
+            background: var(--accent);
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .btn-dl-pdf:hover { background: var(--accent-hover); color: #fff; }
+        .btn-to-epub {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.4rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: #2e7d32;
+            background: #e8f5e9;
+            border: 1px solid #a5d6a7;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .btn-to-epub:hover { background: #c8e6c9; }
+        .btn-dl-epub {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.4rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-decoration: none;
+            color: #fff;
+            background: #388e3c;
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+        .btn-dl-epub:hover { background: #2e7d32; color: #fff; }
+        .epub-status {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.9rem;
+            color: #546e7a;
+        }
+        .epub-status .mini-spinner {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border: 2px solid #388e3c;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
         }
         section h3 { margin-top: 0; }
         .confirm-filename { font-weight: 600; word-break: break-all; }
@@ -246,7 +317,22 @@
             <div id="steps"></div>
         </section>
 
-        <!-- History -->
+        <!-- Done -->
+        <section id="done-section">
+            <div class="done-title">
+                <span style="font-size:1.5rem">✅</span>
+                <h3>Conversion Complete!</h3>
+            </div>
+            <p class="done-subtitle" id="done-subtitle"></p>
+            <div class="done-actions">
+                <a id="btn-dl-pdf" href="#" class="btn-dl-pdf">⬇ Download PDF</a>
+                <div id="epub-action-inline">
+                    <button class="btn-to-epub" onclick="startInlineEpubConvert()">&#9654; Convert to EPUB</button>
+                </div>
+            </div>
+        </section>
+
+
         {% if books %}
         <section>
             <h3>Previously Converted</h3>
@@ -298,6 +384,10 @@
         const progressBar = document.getElementById('progress-bar');
         const convertingName = document.getElementById('converting-name');
 
+        const doneSection = document.getElementById('done-section');
+        const doneSubtitle = document.getElementById('done-subtitle');
+        const btnDlPdf = document.getElementById('btn-dl-pdf');
+        let currentStem = null;
         let pendingFilename = null;
         let elapsedTimer = null;
         let stepStartTime = null;
@@ -392,7 +482,18 @@
                             progressBar.value = totalSteps;
                             addStep('done', s.message, 'done');
                             clearInterval(poller);
-                            setTimeout(() => { window.location.reload(); }, 2000);
+                            // Extract stem from filename
+                            currentStem = pendingFilename ? pendingFilename.replace(/\.acsm$/i, '') : '';
+                            // Show done section after short delay
+                            setTimeout(() => {
+                                progressSection.style.display = 'none';
+                                doneSubtitle.textContent = s.message;
+                                btnDlPdf.href = '/download/' + encodeURIComponent(currentStem + '.pdf');
+                                // Reset epub action area
+                                document.getElementById('epub-action-inline').innerHTML =
+                                    '<button class="btn-to-epub" onclick="startInlineEpubConvert()">&#9654; Convert to EPUB</button>';
+                                doneSection.style.display = 'block';
+                            }, 800);
                             return;
                         } else {
                             const stepNum = s.step;
@@ -480,7 +581,58 @@
             stepsDiv.appendChild(div);
         }
 
-        // ─── EPUB Conversion ─────────────────────────────────────────────
+        // ─── Inline EPUB convert (done section) ──────────────────────────
+
+        async function startInlineEpubConvert() {
+            if (!currentStem) return;
+            const container = document.getElementById('epub-action-inline');
+
+            try {
+                const resp = await fetch('/convert-epub/' + encodeURIComponent(currentStem), { method: 'POST' });
+                const data = await resp.json();
+                if (data.status !== 'started') {
+                    alert(data.message || 'Could not start EPUB conversion');
+                    return;
+                }
+            } catch (err) {
+                alert('Failed to start EPUB conversion: ' + err.message);
+                return;
+            }
+
+            const startTime = Date.now();
+            container.innerHTML =
+                '<div class="epub-status">'
+                + '<span class="mini-spinner"></span>'
+                + '<span>Converting to EPUB… <span id="inline-epub-elapsed">0s</span></span>'
+                + '</div>';
+
+            const elapsedSpan = document.getElementById('inline-epub-elapsed');
+            const timer = setInterval(() => {
+                const secs = Math.floor((Date.now() - startTime) / 1000);
+                elapsedSpan.textContent = formatElapsed(secs);
+            }, 1000);
+
+            const poller = setInterval(async () => {
+                try {
+                    const resp = await fetch('/convert-epub-status/' + encodeURIComponent(currentStem));
+                    const data = await resp.json();
+                    if (data.status === 'done') {
+                        clearInterval(timer);
+                        clearInterval(poller);
+                        container.innerHTML =
+                            '<a href="/download/' + encodeURIComponent(currentStem + '.epub') + '" class="btn-dl-epub">⬇ Download EPUB</a>';
+                    } else if (data.status === 'error') {
+                        clearInterval(timer);
+                        clearInterval(poller);
+                        container.innerHTML =
+                            '<span style="color:#c62828;font-size:0.9rem;">EPUB conversion failed. </span>'
+                            + '<button class="btn-to-epub" onclick="startInlineEpubConvert()" style="margin-left:0.5rem">Retry</button>';
+                    }
+                } catch (err) { /* keep polling */ }
+            }, 3000);
+        }
+
+
 
         async function startEpubConvert(stem, containerId) {
             const container = document.getElementById(containerId);
