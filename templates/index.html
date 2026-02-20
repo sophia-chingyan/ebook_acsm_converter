@@ -22,20 +22,29 @@
         header.hero h1 { color: #fff; margin-bottom: 0.25rem; }
         header.hero p { color: #a0b4cc; margin: 0; }
 
-        .drop-zone {
-            border: 2px dashed #b0bec5;
-            border-radius: 12px;
-            padding: 3rem 2rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.25s;
+        .upload-box {
             background: #fff;
+            border-radius: 12px;
+            padding: 2.5rem 2rem;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             margin-bottom: 2rem;
         }
-        .drop-zone:hover { border-color: var(--accent); background: #eef4fb; }
-        .drop-zone.dragover { border-color: var(--accent); background: #dbe9f9; transform: scale(1.01); }
-        .drop-zone .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
-        .drop-zone p { margin: 0; color: #546e7a; }
+        .upload-box .icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+        .upload-box p { color: #546e7a; margin-bottom: 1.25rem; }
+        .btn-browse {
+            display: inline-block;
+            padding: 0.6rem 1.75rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+            background: var(--accent);
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-browse:hover { background: var(--accent-hover); }
 
         .book-grid {
             display: grid;
@@ -186,12 +195,6 @@
             color: #78909c;
             margin-left: 0.5rem;
         }
-        .step-hint {
-            font-size: 0.85rem;
-            color: #78909c;
-            padding: 0.25rem 0 0 1.5rem;
-            animation: pulse 2s ease-in-out infinite;
-        }
         #confirm-section, #progress-section { display: none; }
         #confirm-section, #progress-section {
             background: #fff;
@@ -217,10 +220,11 @@
     <main class="container">
         <!-- Upload -->
         <section id="upload-section">
-            <div class="drop-zone" id="drop-zone">
+            <div class="upload-box">
                 <div class="icon">&#128214;</div>
-                <p><strong>Drag & drop</strong> an .acsm file here, or <strong>click to browse</strong></p>
+                <p>Select an <strong>.acsm</strong> file to begin conversion</p>
                 <input type="file" id="file-input" accept=".acsm" hidden>
+                <button class="btn-browse" onclick="document.getElementById('file-input').click()">Browse File…</button>
             </div>
         </section>
 
@@ -241,7 +245,6 @@
             <progress id="progress-bar" value="0" max="5" style="margin-bottom:1rem"></progress>
             <div id="steps"></div>
         </section>
-
 
         <!-- History -->
         {% if books %}
@@ -284,7 +287,6 @@
     </main>
 
     <script>
-        const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('file-input');
         const uploadSection = document.getElementById('upload-section');
         const confirmSection = document.getElementById('confirm-section');
@@ -299,23 +301,12 @@
         let pendingFilename = null;
         let elapsedTimer = null;
         let stepStartTime = null;
-        // Track step divs by step number so we update in-place
         const stepDivs = {};
 
-        // Drag and drop
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-        dropZone.addEventListener('drop', e => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            if (e.dataTransfer.files[0]) uploadFile(e.dataTransfer.files[0]);
-        });
         fileInput.addEventListener('change', () => {
             if (fileInput.files[0]) uploadFile(fileInput.files[0]);
         });
 
-        // Confirm buttons
         confirmStart.addEventListener('click', () => {
             if (pendingFilename) startConversion(pendingFilename);
         });
@@ -323,10 +314,10 @@
             confirmSection.style.display = 'none';
             uploadSection.style.display = 'block';
             pendingFilename = null;
+            fileInput.value = '';
         });
 
         async function uploadFile(file) {
-            console.log('[DEBUG] uploadFile called:', file.name, file.size, 'bytes');
             if (!file.name.endsWith('.acsm')) {
                 alert('Please select an .acsm file');
                 return;
@@ -334,18 +325,14 @@
             const formData = new FormData();
             formData.append('file', file);
             try {
-                console.log('[DEBUG] POST /upload ...');
                 const resp = await fetch('/upload', { method: 'POST', body: formData });
-                console.log('[DEBUG] /upload response status:', resp.status);
                 const data = await resp.json();
-                console.log('[DEBUG] /upload response data:', JSON.stringify(data));
                 if (data.error) { alert(data.error); return; }
                 pendingFilename = data.filename;
                 uploadSection.style.display = 'none';
                 confirmFilename.textContent = data.filename;
                 confirmSection.style.display = 'block';
             } catch (err) {
-                console.error('[DEBUG] /upload error:', err);
                 alert('Upload failed: ' + err.message);
             }
         }
@@ -354,7 +341,6 @@
         let lastRenderedSteps = 0;
 
         async function startConversion(filename) {
-            console.log('[DEBUG] startConversion called:', filename);
             confirmSection.style.display = 'none';
             uploadSection.style.display = 'none';
             progressSection.style.display = 'block';
@@ -365,52 +351,35 @@
             lastRenderedSteps = 0;
             Object.keys(stepDivs).forEach(k => delete stepDivs[k]);
 
-            // Start the conversion job
             let jobId;
             try {
-                console.log('[DEBUG] POST /start-convert/' + filename);
                 const resp = await fetch('/start-convert/' + encodeURIComponent(filename), { method: 'POST' });
-                console.log('[DEBUG] /start-convert response status:', resp.status);
                 const text = await resp.text();
-                console.log('[DEBUG] /start-convert response body:', text);
                 let data;
                 try { data = JSON.parse(text); } catch(e) {
-                    console.error('[DEBUG] Failed to parse JSON:', e);
                     addStep('error', 'Server error: ' + text.substring(0, 200), 'error');
                     return;
                 }
                 if (data.error) { alert(data.error); return; }
                 jobId = data.job_id;
-                console.log('[DEBUG] Got job_id:', jobId);
             } catch (err) {
-                console.error('[DEBUG] /start-convert error:', err);
                 alert('Failed to start conversion: ' + err.message);
                 return;
             }
 
-            // Show first step as active
             showActiveStep(1, totalSteps, 'Checking tools...');
 
             let pollCount = 0;
-            // Poll for status every 2 seconds
             const poller = setInterval(async () => {
                 pollCount++;
                 try {
-                    console.log('[DEBUG] Poll #' + pollCount + ' GET /job-status/' + jobId);
                     const resp = await fetch('/job-status/' + encodeURIComponent(jobId));
-                    console.log('[DEBUG] Poll #' + pollCount + ' status:', resp.status);
                     const text = await resp.text();
-                    console.log('[DEBUG] Poll #' + pollCount + ' body:', text);
                     let data;
-                    try { data = JSON.parse(text); } catch(e) {
-                        console.error('[DEBUG] Poll JSON parse error:', e);
-                        return;
-                    }
+                    try { data = JSON.parse(text); } catch(e) { return; }
 
-                    // Render completed steps
                     for (let i = lastRenderedSteps; i < data.steps.length; i++) {
                         const s = data.steps[i];
-                        console.log('[DEBUG] Processing step:', JSON.stringify(s));
                         if (s.step === 'done') {
                             Object.values(stepDivs).forEach(d => {
                                 if (d.dataset.status === 'active') {
@@ -423,7 +392,6 @@
                             progressBar.value = totalSteps;
                             addStep('done', s.message, 'done');
                             clearInterval(poller);
-                            console.log('[DEBUG] Conversion DONE! Reloading in 2s...');
                             setTimeout(() => { window.location.reload(); }, 2000);
                             return;
                         } else {
@@ -436,7 +404,6 @@
                                 if (el) el.remove();
                                 div.childNodes[0].textContent = 'Step ' + stepNum + '/' + totalSteps + ': ' + s.message;
                             } else {
-                                // Step finished before we polled — create it as done
                                 const div = document.createElement('div');
                                 div.className = 'step';
                                 div.dataset.status = 'done';
@@ -449,17 +416,13 @@
                     }
                     lastRenderedSteps = data.steps.length;
 
-                    // Show current active step
                     if (data.status === 'running' && data.current_step > 0) {
                         if (!stepDivs[data.current_step]) {
-                            console.log('[DEBUG] Showing active step:', data.current_step, data.current_label);
                             showActiveStep(data.current_step, totalSteps, data.current_label);
                         }
                     }
 
-                    // Handle error
                     if (data.status === 'error') {
-                        console.error('[DEBUG] Job ERROR:', data.error);
                         Object.values(stepDivs).forEach(d => {
                             if (d.dataset.status === 'active') {
                                 d.dataset.status = 'error';
@@ -473,7 +436,7 @@
                         setTimeout(() => { uploadSection.style.display = 'block'; }, 3000);
                     }
                 } catch (err) {
-                    console.error('[DEBUG] Poll #' + pollCount + ' network error:', err);
+                    // network error — keep polling
                 }
             }, 2000);
         }
@@ -517,7 +480,7 @@
             stepsDiv.appendChild(div);
         }
 
-        // ─── EPUB Conversion (inline on book cards) ─────────────────────
+        // ─── EPUB Conversion ─────────────────────────────────────────────
 
         async function startEpubConvert(stem, containerId) {
             const container = document.getElementById(containerId);
@@ -535,7 +498,6 @@
                 return;
             }
 
-            // Replace button with spinner + timer + stop button
             const startTime = Date.now();
             container.innerHTML =
                 '<div class="epub-converting">'
@@ -550,12 +512,10 @@
                 elapsedSpan.textContent = formatElapsed(secs);
             }, 1000);
 
-            // Poll status every 3 seconds
             const poller = setInterval(async () => {
                 try {
                     const resp = await fetch('/convert-epub-status/' + encodeURIComponent(stem));
                     const data = await resp.json();
-
                     if (data.status === 'done') {
                         clearInterval(timer);
                         clearInterval(poller);
@@ -569,19 +529,16 @@
                             + '<button class="btn-convert-epub" onclick="startEpubConvert(\'' + stem + '\', \'' + containerId + '\')">Retry</button>'
                             + '</div>';
                     } else if (data.status === 'not_found') {
-                        // Conversion was stopped or never started
                         clearInterval(timer);
                         clearInterval(poller);
                         container.innerHTML =
                             '<button class="btn-convert-epub" onclick="startEpubConvert(\'' + stem + '\', \'' + containerId + '\')">Convert to EPUB</button>';
                     }
-                    // status === 'running' → keep polling
                 } catch (err) {
-                    // Network error — keep polling
+                    // keep polling
                 }
             }, 3000);
 
-            // Store poller/timer on container for cleanup by stop
             container._epubTimer = timer;
             container._epubPoller = poller;
         }
@@ -593,14 +550,11 @@
 
             try {
                 await fetch('/stop-convert/' + encodeURIComponent(stem), { method: 'POST' });
-            } catch (err) {
-                // ignore
-            }
+            } catch (err) { /* ignore */ }
 
             container.innerHTML =
                 '<button class="btn-convert-epub" onclick="startEpubConvert(\'' + stem + '\', \'' + containerId + '\')">Convert to EPUB</button>';
         }
-
     </script>
 </body>
 </html>
