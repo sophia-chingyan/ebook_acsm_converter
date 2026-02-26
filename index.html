@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ACSM Converter</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg: #0d0f12;
+            --surface: #161a20;
+            --border: #252b34;
+            --accent: #00d4aa;
+            --accent-dim: rgba(0, 212, 170, 0.12);
+            --text: #e8edf2;
+            --text-muted: #6b7785;
+            --red: #ff5c5c;
+            --yellow: #ffcc44;
+            --mono: 'IBM Plex Mono', monospace;
+            --sans: 'IBM Plex Sans', sans-serif;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+        }
+
+        /* Subtle grid background */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(0,212,170,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,212,170,0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 520px;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+        .header .logo {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.2em;
+            color: var(--accent);
+            text-transform: uppercase;
+            margin-bottom: 0.75rem;
+        }
+        .header h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--text);
+            margin-bottom: 0.4rem;
+        }
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Card */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+        }
+
+        /* Drop zone */
+        .drop-zone {
+            border: 1.5px dashed var(--border);
+            border-radius: 8px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+            position: relative;
+        }
+        .drop-zone:hover { border-color: var(--accent); background: var(--accent-dim); }
+        .drop-zone.dragover { border-color: var(--accent); background: var(--accent-dim); }
+        .drop-zone input { display: none; }
+        .drop-icon {
+            font-size: 2rem;
+            margin-bottom: 0.75rem;
+            display: block;
+        }
+        .drop-zone .primary-text {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text);
+            margin-bottom: 0.3rem;
+        }
+        .drop-zone .secondary-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            font-family: var(--mono);
+        }
+
+        /* Confirm section */
+        .confirm-section { display: none; }
+        .file-display {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.25rem;
+        }
+        .file-icon { font-size: 1.25rem; flex-shrink: 0; }
+        .file-name {
+            font-family: var(--mono);
+            font-size: 0.82rem;
+            color: var(--accent);
+            word-break: break-all;
+            flex: 1;
+        }
+        .confirm-note {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            margin-bottom: 1.25rem;
+            line-height: 1.5;
+        }
+        .btn-row {
+            display: flex;
+            gap: 0.75rem;
+        }
+        .btn {
+            flex: 1;
+            padding: 0.65rem 1rem;
+            border-radius: 6px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            font-family: var(--sans);
+            cursor: pointer;
+            border: 1.5px solid transparent;
+            transition: all 0.18s;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #0d0f12;
+            border-color: var(--accent);
+        }
+        .btn-primary:hover { filter: brightness(1.1); }
+        .btn-secondary {
+            background: transparent;
+            color: var(--text-muted);
+            border-color: var(--border);
+        }
+        .btn-secondary:hover { border-color: var(--text-muted); color: var(--text); }
+
+        /* Progress */
+        .progress-section { display: none; }
+        .progress-label {
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+        .progress-track {
+            height: 3px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+            width: 0%;
+        }
+        .steps-list { display: flex; flex-direction: column; gap: 0.5rem; }
+        .step-row {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            padding: 0.4rem 0;
+        }
+        .step-row.active { color: var(--text); }
+        .step-row.done { color: var(--text-muted); }
+        .step-row.error { color: var(--red); }
+        .step-indicator {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 1.5px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 0.65rem;
+        }
+        .step-row.done .step-indicator {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #0d0f12;
+        }
+        .step-row.active .step-indicator {
+            border-color: var(--accent);
+            position: relative;
+            overflow: hidden;
+        }
+        .step-row.active .step-indicator::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 1.5px solid var(--accent);
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+        }
+        .step-row.error .step-indicator {
+            background: var(--red);
+            border-color: var(--red);
+            color: #fff;
+        }
+        .step-elapsed {
+            margin-left: auto;
+            font-family: var(--mono);
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Download section */
+        .download-section { display: none; }
+        .success-banner {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(0, 212, 170, 0.08);
+            border: 1px solid rgba(0, 212, 170, 0.25);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.25rem;
+        }
+        .success-icon { font-size: 1.3rem; }
+        .success-text { font-size: 0.9rem; color: var(--accent); font-weight: 500; }
+        .download-files { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.25rem; }
+        .download-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.65rem 1rem;
+        }
+        .download-meta { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+        .ext-badge {
+            font-family: var(--mono);
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.2rem 0.45rem;
+            border-radius: 3px;
+            letter-spacing: 0.05em;
+            flex-shrink: 0;
+        }
+        .ext-badge.epub { background: rgba(0,212,170,0.15); color: var(--accent); }
+        .ext-badge.pdf { background: rgba(255,92,92,0.15); color: var(--red); }
+        .download-name {
+            font-family: var(--mono);
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .btn-dl {
+            padding: 0.35rem 0.85rem;
+            border-radius: 5px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            font-family: var(--sans);
+            text-decoration: none;
+            color: var(--text);
+            background: transparent;
+            border: 1.5px solid var(--border);
+            transition: all 0.18s;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .btn-dl:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-reset {
+            width: 100%;
+            padding: 0.65rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            font-family: var(--sans);
+            cursor: pointer;
+            background: transparent;
+            border: 1.5px solid var(--border);
+            color: var(--text-muted);
+            transition: all 0.18s;
+        }
+        .btn-reset:hover { border-color: var(--text-muted); color: var(--text); }
+
+        /* Error */
+        .error-row {
+            background: rgba(255,92,92,0.08);
+            border: 1px solid rgba(255,92,92,0.25);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            font-size: 0.82rem;
+            color: var(--red);
+            margin-top: 1rem;
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 1.5rem 0;
+        }
+
+        /* Section title */
+        .section-title {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            letter-spacing: 0.15em;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">ACSM Tool</div>
+            <h1>ACSM Converter</h1>
+            <p>Convert ebook tokens to DRM-free EPUB &amp; PDF</p>
+        </div>
+
+        <div class="card">
+            <!-- Upload -->
+            <div id="upload-section">
+                <div class="section-title">Upload File</div>
+                <div class="drop-zone" id="drop-zone">
+                    <input type="file" id="file-input" accept=".acsm">
+                    <span class="drop-icon">📄</span>
+                    <div class="primary-text">Drop your .acsm file here</div>
+                    <div class="secondary-text">or click to browse</div>
+                </div>
+            </div>
+
+            <!-- Confirm -->
+            <div id="confirm-section" class="confirm-section">
+                <div class="section-title">Ready to Convert</div>
+                <div class="file-display">
+                    <span class="file-icon">📄</span>
+                    <span class="file-name" id="confirm-filename"></span>
+                </div>
+                <p class="confirm-note">This will download and remove DRM protection from your ebook.</p>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" id="confirm-cancel">Cancel</button>
+                    <button class="btn btn-primary" id="confirm-start">Convert Now</button>
+                </div>
+            </div>
+
+            <!-- Progress -->
+            <div id="progress-section" class="progress-section">
+                <div class="section-title">Converting</div>
+                <div class="progress-label" id="progress-label">Initializing...</div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="steps-list" id="steps-list"></div>
+                <div id="error-box" style="display:none"></div>
+            </div>
+
+            <!-- Download -->
+            <div id="download-section" class="download-section">
+                <div class="success-banner">
+                    <span class="success-icon">✓</span>
+                    <span class="success-text">Conversion complete!</span>
+                </div>
+                <div class="section-title">Download Files</div>
+                <div class="download-files" id="download-files"></div>
+                <button class="btn-reset" id="btn-reset">Convert another file</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+
+    const uploadSection = document.getElementById('upload-section');
+    const confirmSection = document.getElementById('confirm-section');
+    const progressSection = document.getElementById('progress-section');
+    const downloadSection = document.getElementById('download-section');
+
+    const confirmFilename = document.getElementById('confirm-filename');
+    const confirmStart = document.getElementById('confirm-start');
+    const confirmCancel = document.getElementById('confirm-cancel');
+
+    const progressLabel = document.getElementById('progress-label');
+    const progressFill = document.getElementById('progress-fill');
+    const stepsList = document.getElementById('steps-list');
+    const errorBox = document.getElementById('error-box');
+    const downloadFiles = document.getElementById('download-files');
+    const btnReset = document.getElementById('btn-reset');
+
+    let pendingFilename = null;
+
+    const STEP_LABELS = {
+        1: 'Checking tools',
+        2: 'Detecting format',
+        3: 'Registering device',
+        4: 'Downloading ebook',
+        5: 'Removing DRM',
+    };
+    const TOTAL_STEPS = 5;
+
+    function show(el) { el.style.display = 'block'; }
+    function hide(el) { el.style.display = 'none'; }
+
+    function setProgress(step) {
+        progressFill.style.width = (step / TOTAL_STEPS * 100) + '%';
+    }
+
+    // Drop zone
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+    async function handleFile(file) {
+        if (!file.name.endsWith('.acsm')) { alert('Please select an .acsm file'); return; }
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const resp = await fetch('/upload', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (data.error) { alert(data.error); return; }
+            pendingFilename = data.filename;
+            hide(uploadSection);
+            confirmFilename.textContent = data.filename;
+            show(confirmSection);
+        } catch (err) {
+            alert('Upload failed: ' + err.message);
+        }
+    }
+
+    confirmCancel.addEventListener('click', () => {
+        hide(confirmSection);
+        show(uploadSection);
+        pendingFilename = null;
+        fileInput.value = '';
+    });
+
+    confirmStart.addEventListener('click', () => {
+        if (pendingFilename) startConversion(pendingFilename);
+    });
+
+    // --- Step rendering ---
+    const stepDivs = {};
+    let elapsedTimers = {};
+
+    function clearSteps() {
+        stepsList.innerHTML = '';
+        Object.keys(stepDivs).forEach(k => delete stepDivs[k]);
+        Object.values(elapsedTimers).forEach(t => clearInterval(t));
+        Object.keys(elapsedTimers).forEach(k => delete elapsedTimers[k]);
+    }
+
+    function upsertStep(num, label, status, elapsed) {
+        if (!stepDivs[num]) {
+            const row = document.createElement('div');
+            row.className = 'step-row';
+            row.innerHTML = `
+                <div class="step-indicator"></div>
+                <span class="step-text"></span>
+                <span class="step-elapsed"></span>`;
+            stepDivs[num] = row;
+            stepsList.appendChild(row);
+        }
+        const row = stepDivs[num];
+        row.className = 'step-row ' + status;
+        row.querySelector('.step-text').textContent = `${num}/${TOTAL_STEPS} ${label}`;
+        const elSpan = row.querySelector('.step-elapsed');
+        const ind = row.querySelector('.step-indicator');
+
+        // Clear existing elapsed timer for this step
+        if (elapsedTimers[num]) { clearInterval(elapsedTimers[num]); delete elapsedTimers[num]; }
+
+        if (status === 'done') {
+            ind.textContent = '✓';
+            elSpan.textContent = elapsed != null ? formatElapsed(elapsed) : '';
+        } else if (status === 'active') {
+            ind.textContent = '';
+            const startTime = Date.now();
+            elapsedTimers[num] = setInterval(() => {
+                elSpan.textContent = formatElapsed(Math.floor((Date.now() - startTime) / 1000));
+            }, 1000);
+        } else if (status === 'error') {
+            ind.textContent = '✕';
+        } else {
+            ind.textContent = '';
+        }
+    }
+
+    function formatElapsed(s) {
+        const m = Math.floor(s / 60);
+        return m > 0 ? `${m}m ${s % 60}s` : `${s}s`;
+    }
+
+    // --- Conversion polling ---
+    async function startConversion(filename) {
+        hide(confirmSection);
+        show(progressSection);
+        clearSteps();
+        setProgress(0);
+        progressLabel.textContent = 'Starting...';
+        errorBox.style.display = 'none';
+
+        let jobId;
+        try {
+            const resp = await fetch('/start-convert/' + encodeURIComponent(filename), { method: 'POST' });
+            const data = await resp.json();
+            if (data.error) { showError(data.error); return; }
+            jobId = data.job_id;
+        } catch (err) {
+            showError('Failed to start: ' + err.message); return;
+        }
+
+        // Show step 1 active immediately
+        upsertStep(1, STEP_LABELS[1], 'active');
+
+        let lastStepCount = 0;
+
+        const poller = setInterval(async () => {
+            try {
+                const resp = await fetch('/job-status/' + encodeURIComponent(jobId));
+                const data = await resp.json();
+
+                // Render completed steps
+                for (let i = lastStepCount; i < data.steps.length; i++) {
+                    const s = data.steps[i];
+                    if (s.step === 'done') {
+                        // Mark last active step done
+                        Object.entries(stepDivs).forEach(([num, el]) => {
+                            if (el.classList.contains('active')) {
+                                upsertStep(parseInt(num), STEP_LABELS[parseInt(num)], 'done');
+                            }
+                        });
+                        clearInterval(poller);
+                        showDownload(filename, data.elapsed);
+                        return;
+                    } else {
+                        upsertStep(s.step, STEP_LABELS[s.step], 'done');
+                        setProgress(s.step);
+                        progressLabel.textContent = `Step ${s.step}/${TOTAL_STEPS} complete`;
+                    }
+                }
+                lastStepCount = data.steps.length;
+
+                // Show current active step
+                if (data.status === 'running' && data.current_step > 0) {
+                    if (!stepDivs[data.current_step] || !stepDivs[data.current_step].classList.contains('active')) {
+                        upsertStep(data.current_step, STEP_LABELS[data.current_step], 'active');
+                        progressLabel.textContent = data.current_label;
+                    }
+                }
+
+                if (data.status === 'error') {
+                    clearInterval(poller);
+                    // Mark active step as error
+                    Object.entries(stepDivs).forEach(([num, el]) => {
+                        if (el.classList.contains('active')) {
+                            upsertStep(parseInt(num), STEP_LABELS[parseInt(num)], 'error');
+                        }
+                    });
+                    showError(data.error);
+                }
+            } catch (err) { /* keep polling */ }
+        }, 2000);
+    }
+
+    function showError(msg) {
+        errorBox.style.display = 'block';
+        errorBox.className = 'error-row';
+        errorBox.textContent = '⚠ ' + msg;
+        progressLabel.textContent = 'Conversion failed';
+        setTimeout(() => {
+            hide(progressSection);
+            show(uploadSection);
+            fileInput.value = '';
+            pendingFilename = null;
+        }, 5000);
+    }
+
+    function showDownload(filename, elapsed) {
+        setProgress(TOTAL_STEPS);
+        progressLabel.textContent = 'Done!';
+
+        // Build download file list based on the stem
+        const stem = filename.replace(/\.acsm$/i, '');
+        const files = [
+            { name: stem + '.pdf', ext: 'pdf' },
+            { name: stem + '.epub', ext: 'epub' },
+        ];
+
+        downloadFiles.innerHTML = '';
+        files.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'download-item';
+            item.innerHTML = `
+                <div class="download-meta">
+                    <span class="ext-badge ${f.ext}">${f.ext.toUpperCase()}</span>
+                    <span class="download-name">${f.name}</span>
+                </div>
+                <a href="/download/${encodeURIComponent(f.name)}" class="btn-dl">Download</a>`;
+            downloadFiles.appendChild(item);
+        });
+
+        setTimeout(() => {
+            hide(progressSection);
+            show(downloadSection);
+        }, 400);
+    }
+
+    btnReset.addEventListener('click', () => {
+        hide(downloadSection);
+        show(uploadSection);
+        fileInput.value = '';
+        pendingFilename = null;
+        clearSteps();
+    });
+</script>
+</body>
+</html>
