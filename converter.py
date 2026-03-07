@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-ACSM to EPUB/PDF Converter
+ACSM to EPUB Converter
 
-Converts Adobe ACSM ebook tokens to DRM-free EPUB and PDF files
+Converts Adobe ACSM ebook tokens to DRM-free EPUB files
 for personal offline reading.
 
 Prerequisites (installed automatically by setup):
@@ -300,15 +300,20 @@ def remove_drm(input_path, output_path):
     print(f"[OK] DRM removed: {output_path.name}")
 
 
-def convert_format(input_path, output_path):
-    """Convert between EPUB and PDF using Calibre."""
-    print(f"Converting: {input_path.suffix} -> {output_path.suffix}")
+def convert_to_epub(input_path, output_path):
+    """Convert PDF to EPUB using Calibre."""
+    print(f"Converting: {input_path.suffix} -> .epub")
     tool = find_ebook_convert()
-    result = run([tool, str(input_path), str(output_path)])
+    if not tool:
+        raise RuntimeError("Calibre ebook-convert not found. Cannot convert PDF to EPUB.")
+    try:
+        result = run([tool, str(input_path), str(output_path)], timeout=600)
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("PDF to EPUB conversion timed out (600s).")
     if result.returncode != 0:
-        print(f"Conversion failed:\n{result.stderr or result.stdout}")
-        sys.exit(1)
-
+        raise RuntimeError(f"PDF to EPUB conversion failed: {(result.stderr or result.stdout)[:300]}")
+    if not output_path.exists():
+        raise RuntimeError("Conversion completed but EPUB file not found.")
     print(f"[OK] Converted: {output_path.name}")
 
 
@@ -318,8 +323,16 @@ def convert_pipeline(acsm_path, output_dir):
     Used by both the CLI (do_convert) and the web interface (app.py).
     Raises RuntimeError on failure instead of calling sys.exit.
 
-    Always produces 5 steps — downloads and removes DRM only.
-    Format conversion (PDF→EPUB) is handled separately.
+    Always produces an EPUB file. If the native format is PDF,
+    an extra step converts PDF to EPUB using Calibre.
+
+    Steps:
+      1. Check tools
+      2. Detect format
+      3. Register Adobe device
+      4. Download ebook
+      5. Remove DRM
+      6. Convert to EPUB (only if native format is PDF; skipped if already EPUB)
     """
     acsm_path = Path(acsm_path).resolve()
     if not acsm_path.exists():
@@ -345,7 +358,11 @@ def convert_pipeline(acsm_path, output_dir):
 
     # Step 2: Detect format
     fmt = detect_format(acsm_path)
-    yield (2, f"Detected format: {fmt.upper()}")
+    needs_conversion = (fmt == "pdf")
+    if needs_conversion:
+        yield (2, f"Detected format: PDF (will convert to EPUB)")
+    else:
+        yield (2, f"Detected format: EPUB")
 
     # Step 3: Register device
     register_device()
@@ -362,47 +379,39 @@ def convert_pipeline(acsm_path, output_dir):
     drm_file.unlink()
     yield (5, f"DRM removed: {clean_file.name}")
 
+    # Step 6: Convert to EPUB if needed
+    if needs_conversion:
+        epub_file = output_dir / f"{stem}.epub"
+        convert_to_epub(clean_file, epub_file)
+        # Remove the intermediate PDF
+        clean_file.unlink()
+        clean_file = epub_file
+        yield (6, f"Converted to EPUB: {epub_file.name}")
+    else:
+        yield (6, "Already EPUB, no conversion needed.")
+
     # Done
     size_mb = clean_file.stat().st_size / (1024 * 1024) if clean_file.exists() else 0
-    yield ("done", f"Conversion complete! File: {clean_file.name} ({size_mb:.1f} MB)")
+    yield ("done", f"{clean_file.name}|{size_mb:.1f} MB")
 
 
-def do_convert(acsm_file, output_dir, no_convert=False):
-    """Run the full ACSM conversion pipeline (CLI entry point).
-
-    If no_convert is False (default), also run format conversion after
-    the pipeline (PDF→EPUB or EPUB→PDF).
-    """
+def do_convert(acsm_file, output_dir):
+    """Run the full ACSM to EPUB conversion pipeline (CLI entry point)."""
     try:
-        clean_file = None
         for step, message in convert_pipeline(acsm_file, output_dir):
             if step == "done":
-                print(f"\n=== Done! ===\n{message}")
+                parts = message.split("|")
+                print(f"\n=== Done! ===\nFile: {parts[0]} ({parts[1]})")
             else:
-                print(f"\n=== Step {step}/5: {message} ===")
-                if step == 5:
-                    # Extract the clean filename from the message
-                    # message is like "DRM removed: filename.pdf"
-                    parts = message.split(": ", 1)
-                    if len(parts) == 2:
-                        clean_file = Path(output_dir) / parts[1]
+                print(f"\n=== Step {step}/6: {message} ===")
     except RuntimeError as e:
         print(str(e))
         sys.exit(1)
 
-    if not no_convert and clean_file and clean_file.exists():
-        fmt = clean_file.suffix
-        if fmt == ".pdf":
-            other_file = clean_file.with_suffix(".epub")
-        else:
-            other_file = clean_file.with_suffix(".pdf")
-        print(f"\n=== Converting {fmt[1:].upper()} → {other_file.suffix[1:].upper()} ===")
-        convert_format(clean_file, other_file)
-
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert ACSM ebook tokens to DRM-free EPUB and PDF.",
+        description="Convert ACSM ebook tokens to DRM-free EPUB.",
         epilog="First run: python3 converter.py --setup",
     )
     parser.add_argument(
@@ -414,11 +423,6 @@ def main():
         "--setup",
         action="store_true",
         help="Install dependencies and build tools (run once)",
-    )
-    parser.add_argument(
-        "--no-convert",
-        action="store_true",
-        help="Skip format conversion (only download and remove DRM)",
     )
     parser.add_argument(
         "-o", "--output-dir",
@@ -435,7 +439,7 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    do_convert(args.acsm_file, args.output_dir, no_convert=args.no_convert)
+    do_convert(args.acsm_file, args.output_dir)
 
 
 if __name__ == "__main__":

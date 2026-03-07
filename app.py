@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Flask web interface for the ACSM converter."""
+"""Flask web interface for the ACSM to EPUB converter."""
 
 import json
 import os
@@ -36,12 +36,11 @@ STEP_LABELS = {
     3: "Registering Adobe device...",
     4: "Downloading ebook...",
     5: "Removing DRM...",
+    6: "Converting to EPUB...",
 }
 
 # Track active conversions: job_id -> {steps: [...], status, error}
 active_jobs = {}
-# Track active EPUB conversions
-active_conversions = {}
 
 
 def login_required(f):
@@ -139,22 +138,20 @@ def get_books():
         return []
     books = OrderedDict()
     for f in sorted(OUTPUT_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-        if f.suffix in (".pdf", ".epub"):
+        if f.suffix == ".epub":
             stem = f.stem
             if stem not in books:
-                books[stem] = {"stem": stem, "files": [], "cover": None, "has_epub": False}
+                books[stem] = {"stem": stem, "files": [], "cover": None}
             size_mb = f.stat().st_size / (1024 * 1024)
             books[stem]["files"].append({
                 "name": f.name,
                 "size": f"{size_mb:.1f} MB",
                 "ext": f.suffix[1:].upper(),
             })
-            if f.suffix == ".epub":
-                books[stem]["has_epub"] = True
-                if not books[stem]["cover"]:
-                    cover = extract_epub_cover(f)
-                    if cover:
-                        books[stem]["cover"] = cover
+            if not books[stem]["cover"]:
+                cover = extract_epub_cover(f)
+                if cover:
+                    books[stem]["cover"] = cover
     return list(books.values())
 
 
@@ -162,7 +159,7 @@ def run_conversion_job(job_id, acsm_path, output_dir):
     """Run conversion in a background thread, updating active_jobs."""
     import traceback
     job = active_jobs[job_id]
-    total = 5
+    total = 6
     print(f"[DEBUG] Job {job_id} started: acsm={acsm_path}, output={output_dir}", flush=True)
     try:
         job["current_step"] = 1
@@ -265,82 +262,6 @@ def job_status(job_id):
         "done_message": job["done_message"],
         "elapsed": elapsed,
     })
-
-
-@app.route("/convert-epub/<stem>", methods=["POST"])
-@login_required
-def convert_epub(stem):
-    stem = Path(stem).name
-    if stem in active_conversions:
-        proc = active_conversions[stem]["process"]
-        if proc.poll() is None:
-            return jsonify({"status": "already_running"}), 409
-
-    pdf_path = OUTPUT_DIR / f"{stem}.pdf"
-    epub_path = OUTPUT_DIR / f"{stem}.epub"
-
-    if not pdf_path.exists():
-        return jsonify({"status": "error", "message": "PDF not found"}), 404
-    if epub_path.exists():
-        return jsonify({"status": "error", "message": "EPUB already exists"}), 409
-
-    tool = find_ebook_convert()
-    if not tool:
-        return jsonify({"status": "error", "message": "Calibre not installed"}), 500
-
-    proc = subprocess.Popen(
-        [tool, str(pdf_path), str(epub_path)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    active_conversions[stem] = {"process": proc, "start_time": time.time()}
-    return jsonify({"status": "started"})
-
-
-@app.route("/convert-epub-status/<stem>")
-@login_required
-def convert_epub_status(stem):
-    stem = Path(stem).name
-    if stem not in active_conversions:
-        epub_path = OUTPUT_DIR / f"{stem}.epub"
-        if epub_path.exists():
-            return jsonify({"status": "done", "elapsed": 0})
-        return jsonify({"status": "not_found"}), 404
-
-    info = active_conversions[stem]
-    proc = info["process"]
-    elapsed = round(time.time() - info["start_time"])
-
-    if proc.poll() is None:
-        return jsonify({"status": "running", "elapsed": elapsed})
-
-    del active_conversions[stem]
-    epub_path = OUTPUT_DIR / f"{stem}.epub"
-    if proc.returncode == 0 and epub_path.exists():
-        return jsonify({"status": "done", "elapsed": elapsed})
-    else:
-        stderr = proc.stderr.read().decode() if proc.stderr else ""
-        return jsonify({"status": "error", "elapsed": elapsed, "message": stderr or "Conversion failed"})
-
-
-@app.route("/stop-convert/<stem>", methods=["POST"])
-@login_required
-def stop_convert(stem):
-    stem = Path(stem).name
-    if stem not in active_conversions:
-        return jsonify({"status": "not_found"}), 404
-
-    info = active_conversions[stem]
-    proc = info["process"]
-    if proc.poll() is None:
-        proc.kill()
-    del active_conversions[stem]
-
-    epub_path = OUTPUT_DIR / f"{stem}.epub"
-    if epub_path.exists():
-        epub_path.unlink()
-
-    return jsonify({"status": "stopped"})
 
 
 @app.route("/download/<filename>")
