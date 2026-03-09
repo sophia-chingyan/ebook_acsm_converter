@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ACSM Converter</title>
+    <title>ACSM to EPUB Converter</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
     <style>
         :root {
@@ -109,7 +109,6 @@
             letter-spacing: 0.03em;
         }
         .file-badge.epub { background: #e8f5e9; color: #2e7d32; }
-        .file-badge.pdf { background: #fce4ec; color: #c62828; }
         .file-size { color: #78909c; font-size: 0.85rem; }
         .btn-dl {
             display: inline-block;
@@ -124,53 +123,6 @@
             white-space: nowrap;
         }
         .btn-dl:hover { background: var(--accent-hover); color: #fff; }
-
-        .btn-convert-epub {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            padding: 0.35rem 0.85rem;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            font-weight: 500;
-            color: #2e7d32;
-            background: #e8f5e9;
-            border: 1px solid #a5d6a7;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 0.5rem;
-        }
-        .btn-convert-epub:hover { background: #c8e6c9; }
-        .btn-convert-epub:disabled { opacity: 0.6; cursor: default; }
-
-        .epub-converting {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            margin-top: 0.5rem;
-            font-size: 0.85rem;
-            color: #546e7a;
-        }
-        .epub-converting .mini-spinner {
-            display: inline-block;
-            width: 14px; height: 14px;
-            border: 2px solid var(--accent);
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-        }
-        .btn-stop {
-            padding: 0.2rem 0.6rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 500;
-            color: #c62828;
-            background: #fce4ec;
-            border: 1px solid #ef9a9a;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .btn-stop:hover { background: #ffcdd2; }
 
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -212,37 +164,6 @@
         .done-title h3 { margin: 0; color: #2e7d32; }
         .done-subtitle { color: #546e7a; margin-bottom: 1.5rem; font-size: 0.95rem; }
         .done-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
-        .btn-dl-pdf {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 1.4rem;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            text-decoration: none;
-            color: #fff;
-            background: var(--accent);
-            transition: background 0.2s;
-            white-space: nowrap;
-        }
-        .btn-dl-pdf:hover { background: var(--accent-hover); color: #fff; }
-        .btn-to-epub {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 1.4rem;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            font-weight: 600;
-            color: #2e7d32;
-            background: #e8f5e9;
-            border: 1px solid #a5d6a7;
-            cursor: pointer;
-            transition: all 0.2s;
-            white-space: nowrap;
-        }
-        .btn-to-epub:hover { background: #c8e6c9; }
         .btn-dl-epub {
             display: inline-flex;
             align-items: center;
@@ -258,22 +179,22 @@
             white-space: nowrap;
         }
         .btn-dl-epub:hover { background: #2e7d32; color: #fff; }
-        .epub-status {
-            display: flex;
+        .btn-another {
+            display: inline-flex;
             align-items: center;
-            gap: 0.6rem;
-            font-size: 0.9rem;
+            gap: 0.5rem;
+            padding: 0.6rem 1.4rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
             color: #546e7a;
+            background: transparent;
+            border: 1px solid #cfd8dc;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
         }
-        .epub-status .mini-spinner {
-            display: inline-block;
-            width: 14px; height: 14px;
-            border: 2px solid #388e3c;
-            border-top-color: transparent;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            flex-shrink: 0;
-        }
+        .btn-another:hover { border-color: #90a4ae; color: #37474f; }
         section h3 { margin-top: 0; }
         .confirm-filename { font-weight: 600; word-break: break-all; }
         .confirm-buttons { display: flex; gap: 1rem; margin-top: 1rem; }
@@ -283,8 +204,8 @@
 <body>
     <header class="hero">
         <div class="container">
-            <h1>ACSM Converter</h1>
-            <p>Convert ACSM ebook tokens to DRM-free EPUB and PDF</p>
+            <h1>ACSM to EPUB Converter</h1>
+            <p>Convert ACSM ebook tokens to DRM-free EPUB</p>
         </div>
     </header>
 
@@ -293,7 +214,7 @@
         <section id="upload-section">
             <div class="upload-box">
                 <div class="icon">&#128214;</div>
-                <p>Select an <strong>.acsm</strong> file to begin conversion</p>
+                <p>Select an <strong>.acsm</strong> file to convert to EPUB</p>
                 <input type="file" id="file-input" accept=".acsm" hidden>
                 <button class="btn-browse" onclick="document.getElementById('file-input').click()">Browse File…</button>
             </div>
@@ -303,7 +224,7 @@
         <section id="confirm-section">
             <h3>Ready to Convert</h3>
             <p>File: <span class="confirm-filename" id="confirm-filename"></span></p>
-            <p>This will download the ebook and remove DRM protection.</p>
+            <p>This will download the ebook, remove DRM, and produce an EPUB file.</p>
             <div class="confirm-buttons">
                 <button id="confirm-cancel" class="secondary outline">Cancel</button>
                 <button id="confirm-start">Start Conversion</button>
@@ -313,7 +234,7 @@
         <!-- Progress -->
         <section id="progress-section">
             <h3>Converting: <span id="converting-name"></span></h3>
-            <progress id="progress-bar" value="0" max="5" style="margin-bottom:1rem"></progress>
+            <progress id="progress-bar" value="0" max="6" style="margin-bottom:1rem"></progress>
             <div id="steps"></div>
         </section>
 
@@ -325,13 +246,10 @@
             </div>
             <p class="done-subtitle" id="done-subtitle"></p>
             <div class="done-actions">
-                <a id="btn-dl-pdf" href="#" class="btn-dl-pdf">⬇ Download PDF</a>
-                <div id="epub-action-inline">
-                    <button class="btn-to-epub" onclick="startInlineEpubConvert()">&#9654; Convert to EPUB</button>
-                </div>
+                <a id="btn-dl-epub" href="#" class="btn-dl-epub">⬇ Download EPUB</a>
+                <button class="btn-another" onclick="resetToUpload()">Convert another file</button>
             </div>
         </section>
-
 
         {% if books %}
         <section>
@@ -357,13 +275,6 @@
                             </div>
                             {% endfor %}
                         </div>
-                        {% if not book.has_epub %}
-                        <div id="epub-action-{{ loop.index }}" data-stem="{{ book.stem }}">
-                            <button class="btn-convert-epub" onclick="startEpubConvert('{{ book.stem }}', 'epub-action-{{ loop.index }}')">
-                                Convert to EPUB
-                            </button>
-                        </div>
-                        {% endif %}
                     </div>
                 </article>
                 {% endfor %}
@@ -386,12 +297,14 @@
 
         const doneSection = document.getElementById('done-section');
         const doneSubtitle = document.getElementById('done-subtitle');
-        const btnDlPdf = document.getElementById('btn-dl-pdf');
-        let currentStem = null;
+        const btnDlEpub = document.getElementById('btn-dl-epub');
+
         let pendingFilename = null;
         let elapsedTimer = null;
         let stepStartTime = null;
         const stepDivs = {};
+
+        const TOTAL_STEPS = 6;
 
         fileInput.addEventListener('change', () => {
             if (fileInput.files[0]) uploadFile(fileInput.files[0]);
@@ -406,6 +319,17 @@
             pendingFilename = null;
             fileInput.value = '';
         });
+
+        function resetToUpload() {
+            doneSection.style.display = 'none';
+            progressSection.style.display = 'none';
+            confirmSection.style.display = 'none';
+            uploadSection.style.display = 'block';
+            pendingFilename = null;
+            fileInput.value = '';
+            stepsDiv.innerHTML = '';
+            Object.keys(stepDivs).forEach(k => delete stepDivs[k]);
+        }
 
         async function uploadFile(file) {
             if (!file.name.endsWith('.acsm')) {
@@ -427,7 +351,6 @@
             }
         }
 
-        let totalSteps = 5;
         let lastRenderedSteps = 0;
 
         async function startConversion(filename) {
@@ -437,7 +360,6 @@
             convertingName.textContent = filename;
             stepsDiv.innerHTML = '';
             progressBar.value = 0;
-            totalSteps = 5;
             lastRenderedSteps = 0;
             Object.keys(stepDivs).forEach(k => delete stepDivs[k]);
 
@@ -457,11 +379,9 @@
                 return;
             }
 
-            showActiveStep(1, totalSteps, 'Checking tools...');
+            showActiveStep(1, TOTAL_STEPS, 'Checking tools...');
 
-            let pollCount = 0;
             const poller = setInterval(async () => {
-                pollCount++;
                 try {
                     const resp = await fetch('/job-status/' + encodeURIComponent(jobId));
                     const text = await resp.text();
@@ -471,6 +391,7 @@
                     for (let i = lastRenderedSteps; i < data.steps.length; i++) {
                         const s = data.steps[i];
                         if (s.step === 'done') {
+                            // Mark any active step as done
                             Object.values(stepDivs).forEach(d => {
                                 if (d.dataset.status === 'active') {
                                     d.dataset.status = 'done';
@@ -479,19 +400,18 @@
                                 }
                             });
                             stopElapsedTimer();
-                            progressBar.value = totalSteps;
-                            addStep('done', s.message, 'done');
+                            progressBar.value = TOTAL_STEPS;
                             clearInterval(poller);
-                            // Extract stem from filename
-                            currentStem = pendingFilename ? pendingFilename.replace(/\.acsm$/i, '') : '';
-                            // Show done section after short delay
+
+                            // Parse done message: "filename.epub|2.1 MB"
+                            const parts = s.message.split('|');
+                            const epubFilename = parts[0];
+                            const fileSize = parts[1] || '';
+
                             setTimeout(() => {
                                 progressSection.style.display = 'none';
-                                doneSubtitle.textContent = s.message;
-                                btnDlPdf.href = '/download/' + encodeURIComponent(currentStem + '.pdf');
-                                // Reset epub action area
-                                document.getElementById('epub-action-inline').innerHTML =
-                                    '<button class="btn-to-epub" onclick="startInlineEpubConvert()">&#9654; Convert to EPUB</button>';
+                                doneSubtitle.textContent = epubFilename + ' (' + fileSize + ')';
+                                btnDlEpub.href = '/download/' + encodeURIComponent(epubFilename);
                                 doneSection.style.display = 'block';
                             }, 800);
                             return;
@@ -503,12 +423,12 @@
                                 div.dataset.status = 'done';
                                 const el = div.querySelector('.elapsed');
                                 if (el) el.remove();
-                                div.childNodes[0].textContent = 'Step ' + stepNum + '/' + totalSteps + ': ' + s.message;
+                                div.childNodes[0].textContent = 'Step ' + stepNum + '/' + TOTAL_STEPS + ': ' + s.message;
                             } else {
                                 const div = document.createElement('div');
                                 div.className = 'step';
                                 div.dataset.status = 'done';
-                                div.textContent = 'Step ' + stepNum + '/' + totalSteps + ': ' + s.message;
+                                div.textContent = 'Step ' + stepNum + '/' + TOTAL_STEPS + ': ' + s.message;
                                 stepDivs[stepNum] = div;
                                 stepsDiv.appendChild(div);
                             }
@@ -519,7 +439,7 @@
 
                     if (data.status === 'running' && data.current_step > 0) {
                         if (!stepDivs[data.current_step]) {
-                            showActiveStep(data.current_step, totalSteps, data.current_label);
+                            showActiveStep(data.current_step, TOTAL_STEPS, data.current_label);
                         }
                     }
 
@@ -534,7 +454,7 @@
                         stopElapsedTimer();
                         addStep('error', data.error, 'error');
                         clearInterval(poller);
-                        setTimeout(() => { uploadSection.style.display = 'block'; }, 3000);
+                        setTimeout(() => { resetToUpload(); }, 5000);
                     }
                 } catch (err) {
                     // network error — keep polling
@@ -579,133 +499,6 @@
             div.dataset.status = status;
             div.textContent = text;
             stepsDiv.appendChild(div);
-        }
-
-        // ─── Inline EPUB convert (done section) ──────────────────────────
-
-        async function startInlineEpubConvert() {
-            if (!currentStem) return;
-            const container = document.getElementById('epub-action-inline');
-
-            try {
-                const resp = await fetch('/convert-epub/' + encodeURIComponent(currentStem), { method: 'POST' });
-                const data = await resp.json();
-                if (data.status !== 'started') {
-                    alert(data.message || 'Could not start EPUB conversion');
-                    return;
-                }
-            } catch (err) {
-                alert('Failed to start EPUB conversion: ' + err.message);
-                return;
-            }
-
-            const startTime = Date.now();
-            container.innerHTML =
-                '<div class="epub-status">'
-                + '<span class="mini-spinner"></span>'
-                + '<span>Converting to EPUB… <span id="inline-epub-elapsed">0s</span></span>'
-                + '</div>';
-
-            const elapsedSpan = document.getElementById('inline-epub-elapsed');
-            const timer = setInterval(() => {
-                const secs = Math.floor((Date.now() - startTime) / 1000);
-                elapsedSpan.textContent = formatElapsed(secs);
-            }, 1000);
-
-            const poller = setInterval(async () => {
-                try {
-                    const resp = await fetch('/convert-epub-status/' + encodeURIComponent(currentStem));
-                    const data = await resp.json();
-                    if (data.status === 'done') {
-                        clearInterval(timer);
-                        clearInterval(poller);
-                        container.innerHTML =
-                            '<a href="/download/' + encodeURIComponent(currentStem + '.epub') + '" class="btn-dl-epub">⬇ Download EPUB</a>';
-                    } else if (data.status === 'error') {
-                        clearInterval(timer);
-                        clearInterval(poller);
-                        container.innerHTML =
-                            '<span style="color:#c62828;font-size:0.9rem;">EPUB conversion failed. </span>'
-                            + '<button class="btn-to-epub" onclick="startInlineEpubConvert()" style="margin-left:0.5rem">Retry</button>';
-                    }
-                } catch (err) { /* keep polling */ }
-            }, 3000);
-        }
-
-
-
-        async function startEpubConvert(stem, containerId) {
-            const container = document.getElementById(containerId);
-            if (!container) return;
-
-            try {
-                const resp = await fetch('/convert-epub/' + encodeURIComponent(stem), { method: 'POST' });
-                const data = await resp.json();
-                if (data.status !== 'started') {
-                    alert(data.message || 'Could not start conversion');
-                    return;
-                }
-            } catch (err) {
-                alert('Failed to start EPUB conversion: ' + err.message);
-                return;
-            }
-
-            const startTime = Date.now();
-            container.innerHTML =
-                '<div class="epub-converting">'
-                + '<span class="mini-spinner"></span>'
-                + '<span>Converting to EPUB... <span class="epub-elapsed">0s</span></span>'
-                + '<button class="btn-stop" onclick="stopEpubConvert(\'' + stem + '\', \'' + containerId + '\')">Stop</button>'
-                + '</div>';
-
-            const elapsedSpan = container.querySelector('.epub-elapsed');
-            const timer = setInterval(() => {
-                const secs = Math.floor((Date.now() - startTime) / 1000);
-                elapsedSpan.textContent = formatElapsed(secs);
-            }, 1000);
-
-            const poller = setInterval(async () => {
-                try {
-                    const resp = await fetch('/convert-epub-status/' + encodeURIComponent(stem));
-                    const data = await resp.json();
-                    if (data.status === 'done') {
-                        clearInterval(timer);
-                        clearInterval(poller);
-                        window.location.reload();
-                    } else if (data.status === 'error') {
-                        clearInterval(timer);
-                        clearInterval(poller);
-                        container.innerHTML =
-                            '<div style="color:#c62828; font-size:0.85rem; margin-top:0.5rem;">'
-                            + 'EPUB conversion failed. '
-                            + '<button class="btn-convert-epub" onclick="startEpubConvert(\'' + stem + '\', \'' + containerId + '\')">Retry</button>'
-                            + '</div>';
-                    } else if (data.status === 'not_found') {
-                        clearInterval(timer);
-                        clearInterval(poller);
-                        container.innerHTML =
-                            '<button class="btn-convert-epub" onclick="startEpubConvert(\'' + stem + '\', \'' + containerId + '\')">Convert to EPUB</button>';
-                    }
-                } catch (err) {
-                    // keep polling
-                }
-            }, 3000);
-
-            container._epubTimer = timer;
-            container._epubPoller = poller;
-        }
-
-        async function stopEpubConvert(stem, containerId) {
-            const container = document.getElementById(containerId);
-            if (container._epubTimer) clearInterval(container._epubTimer);
-            if (container._epubPoller) clearInterval(container._epubPoller);
-
-            try {
-                await fetch('/stop-convert/' + encodeURIComponent(stem), { method: 'POST' });
-            } catch (err) { /* ignore */ }
-
-            container.innerHTML =
-                '<button class="btn-convert-epub" onclick="startEpubConvert(\'' + stem + '\', \'' + containerId + '\')">Convert to EPUB</button>';
         }
     </script>
 </body>
