@@ -71,15 +71,8 @@
             flex-shrink: 0;
             overflow: hidden;
         }
-        .book-cover img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .book-cover .placeholder {
-            font-size: 2.5rem;
-            color: #9e9e9e;
-        }
+        .book-cover img { width: 100%; height: 100%; object-fit: cover; }
+        .book-cover .placeholder { font-size: 2.5rem; color: #9e9e9e; }
         .book-info {
             padding: 1rem 1.25rem;
             display: flex;
@@ -88,18 +81,9 @@
             flex: 1;
             min-width: 0;
         }
-        .book-info h4 {
-            margin: 0 0 0.75rem 0;
-            font-size: 1.05rem;
-            word-break: break-word;
-        }
+        .book-info h4 { margin: 0 0 0.75rem 0; font-size: 1.05rem; word-break: break-word; }
         .book-files { display: flex; flex-direction: column; gap: 0.4rem; }
-        .book-file {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 0.75rem;
-        }
+        .book-file { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
         .file-badge {
             display: inline-block;
             padding: 0.15rem 0.5rem;
@@ -107,8 +91,9 @@
             font-size: 0.75rem;
             font-weight: 600;
             letter-spacing: 0.03em;
+            background: #e8f5e9;
+            color: #2e7d32;
         }
-        .file-badge.epub { background: #e8f5e9; color: #2e7d32; }
         .file-size { color: #78909c; font-size: 0.85rem; }
         .btn-dl {
             display: inline-block;
@@ -125,7 +110,6 @@
         .btn-dl:hover { background: var(--accent-hover); color: #fff; }
 
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
         .step { padding: 0.3rem 0; }
         .step[data-status="active"] { font-weight: bold; }
         .step[data-status="done"]::before { content: "\2713 "; color: #2e7d32; }
@@ -155,12 +139,7 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
             margin-bottom: 2rem;
         }
-        .done-title {
-            display: flex;
-            align-items: center;
-            gap: 0.6rem;
-            margin-bottom: 0.4rem;
-        }
+        .done-title { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
         .done-title h3 { margin: 0; color: #2e7d32; }
         .done-subtitle { color: #546e7a; margin-bottom: 1.5rem; font-size: 0.95rem; }
         .done-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
@@ -205,7 +184,7 @@
     <header class="hero">
         <div class="container">
             <h1>ACSM to EPUB Converter</h1>
-            <p>Convert ACSM ebook tokens to DRM-free EPUB</p>
+            <p>Convert EPUB-sourced ACSM tokens to DRM-free EPUB</p>
         </div>
     </header>
 
@@ -214,7 +193,7 @@
         <section id="upload-section">
             <div class="upload-box">
                 <div class="icon">&#128214;</div>
-                <p>Select an <strong>.acsm</strong> file to convert to EPUB</p>
+                <p>Select an <strong>.acsm</strong> file (EPUB source) to convert</p>
                 <input type="file" id="file-input" accept=".acsm" hidden>
                 <button class="btn-browse" onclick="document.getElementById('file-input').click()">Browse File…</button>
             </div>
@@ -224,7 +203,7 @@
         <section id="confirm-section">
             <h3>Ready to Convert</h3>
             <p>File: <span class="confirm-filename" id="confirm-filename"></span></p>
-            <p>This will download the ebook, remove DRM, and produce an EPUB file.</p>
+            <p>This will download the EPUB and remove DRM.</p>
             <div class="confirm-buttons">
                 <button id="confirm-cancel" class="secondary outline">Cancel</button>
                 <button id="confirm-start">Start Conversion</button>
@@ -234,7 +213,7 @@
         <!-- Progress -->
         <section id="progress-section">
             <h3>Converting: <span id="converting-name"></span></h3>
-            <progress id="progress-bar" value="0" max="6" style="margin-bottom:1rem"></progress>
+            <progress id="progress-bar" value="0" max="5" style="margin-bottom:1rem"></progress>
             <div id="steps"></div>
         </section>
 
@@ -269,7 +248,7 @@
                         <div class="book-files">
                             {% for f in book.files %}
                             <div class="book-file">
-                                <span class="file-badge {{ f.ext|lower }}">{{ f.ext }}</span>
+                                <span class="file-badge">{{ f.ext }}</span>
                                 <span class="file-size">{{ f.size }}</span>
                                 <a href="/download/{{ f.name }}" class="btn-dl">Download</a>
                             </div>
@@ -284,6 +263,8 @@
     </main>
 
     <script>
+        const TOTAL_STEPS = 5;
+
         const fileInput = document.getElementById('file-input');
         const uploadSection = document.getElementById('upload-section');
         const confirmSection = document.getElementById('confirm-section');
@@ -294,7 +275,6 @@
         const stepsDiv = document.getElementById('steps');
         const progressBar = document.getElementById('progress-bar');
         const convertingName = document.getElementById('converting-name');
-
         const doneSection = document.getElementById('done-section');
         const doneSubtitle = document.getElementById('done-subtitle');
         const btnDlEpub = document.getElementById('btn-dl-epub');
@@ -303,8 +283,7 @@
         let elapsedTimer = null;
         let stepStartTime = null;
         const stepDivs = {};
-
-        const TOTAL_STEPS = 6;
+        let lastRenderedSteps = 0;
 
         fileInput.addEventListener('change', () => {
             if (fileInput.files[0]) uploadFile(fileInput.files[0]);
@@ -351,8 +330,6 @@
             }
         }
 
-        let lastRenderedSteps = 0;
-
         async function startConversion(filename) {
             confirmSection.style.display = 'none';
             uploadSection.style.display = 'none';
@@ -379,7 +356,7 @@
                 return;
             }
 
-            showActiveStep(1, TOTAL_STEPS, 'Checking tools...');
+            showActiveStep(1, 'Checking tools...');
 
             const poller = setInterval(async () => {
                 try {
@@ -391,7 +368,6 @@
                     for (let i = lastRenderedSteps; i < data.steps.length; i++) {
                         const s = data.steps[i];
                         if (s.step === 'done') {
-                            // Mark any active step as done
                             Object.values(stepDivs).forEach(d => {
                                 if (d.dataset.status === 'active') {
                                     d.dataset.status = 'done';
@@ -403,7 +379,6 @@
                             progressBar.value = TOTAL_STEPS;
                             clearInterval(poller);
 
-                            // Parse done message: "filename.epub|2.1 MB"
                             const parts = s.message.split('|');
                             const epubFilename = parts[0];
                             const fileSize = parts[1] || '';
@@ -439,7 +414,7 @@
 
                     if (data.status === 'running' && data.current_step > 0) {
                         if (!stepDivs[data.current_step]) {
-                            showActiveStep(data.current_step, TOTAL_STEPS, data.current_label);
+                            showActiveStep(data.current_step, data.current_label);
                         }
                     }
 
@@ -462,12 +437,12 @@
             }, 2000);
         }
 
-        function showActiveStep(stepNum, total, label) {
+        function showActiveStep(stepNum, label) {
             stopElapsedTimer();
             const div = document.createElement('div');
             div.className = 'step';
             div.dataset.status = 'active';
-            const textNode = document.createTextNode('Step ' + stepNum + '/' + total + ': ' + label + ' ');
+            const textNode = document.createTextNode('Step ' + stepNum + '/' + TOTAL_STEPS + ': ' + label + ' ');
             div.appendChild(textNode);
             stepDivs[stepNum] = div;
 
