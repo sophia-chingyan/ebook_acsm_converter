@@ -110,13 +110,17 @@
         .btn-dl:hover { background: var(--accent-hover); color: #fff; }
 
         @keyframes spin { to { transform: rotate(360deg); } }
-        .step { padding: 0.3rem 0; }
+        .step { padding: 0.3rem 0; font-size: 0.95rem; }
         .step[data-status="active"] { font-weight: bold; }
-        .step[data-status="done"]::before { content: "\2713 "; color: #2e7d32; }
+        .step[data-status="done"]::before   { content: "✓ "; color: #2e7d32; }
+        .step[data-status="warning"]::before { content: "⚠ "; color: #e65100; }
+        .step[data-status="error"]::before  { content: "✗ "; color: #c62828; }
+        .step[data-status="warning"] { color: #bf360c; }
+        .step[data-status="error"]   { color: #c62828; }
         .step[data-status="active"]::before {
             content: "";
             display: inline-block;
-            width: 14px; height: 14px;
+            width: 13px; height: 13px;
             border: 2px solid var(--accent);
             border-top-color: transparent;
             border-radius: 50%;
@@ -124,7 +128,6 @@
             vertical-align: middle;
             margin-right: 6px;
         }
-        .step[data-status="error"]::before { content: "\2717 "; color: #c62828; }
         .step .elapsed {
             font-weight: normal;
             font-size: 0.8rem;
@@ -141,7 +144,18 @@
         }
         .done-title { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
         .done-title h3 { margin: 0; color: #2e7d32; }
-        .done-subtitle { color: #546e7a; margin-bottom: 1.5rem; font-size: 0.95rem; }
+        .done-subtitle { color: #546e7a; margin-bottom: 1rem; font-size: 0.95rem; }
+        .link-warning-box {
+            background: #fff8e1;
+            border: 1px solid #ffe082;
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.25rem;
+            font-size: 0.88rem;
+            color: #5d4037;
+            display: none;
+        }
+        .link-warning-box strong { color: #e65100; }
         .done-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
         .btn-dl-epub {
             display: inline-flex;
@@ -203,7 +217,7 @@
         <section id="confirm-section">
             <h3>Ready to Convert</h3>
             <p>File: <span class="confirm-filename" id="confirm-filename"></span></p>
-            <p>This will download the EPUB and remove DRM.</p>
+            <p>This will download the EPUB, remove DRM, and verify all links.</p>
             <div class="confirm-buttons">
                 <button id="confirm-cancel" class="secondary outline">Cancel</button>
                 <button id="confirm-start">Start Conversion</button>
@@ -213,17 +227,21 @@
         <!-- Progress -->
         <section id="progress-section">
             <h3>Converting: <span id="converting-name"></span></h3>
-            <progress id="progress-bar" value="0" max="5" style="margin-bottom:1rem"></progress>
+            <progress id="progress-bar" value="0" max="6" style="margin-bottom:1rem"></progress>
             <div id="steps"></div>
         </section>
 
         <!-- Done -->
         <section id="done-section">
             <div class="done-title">
-                <span style="font-size:1.5rem">✅</span>
-                <h3>Conversion Complete!</h3>
+                <span id="done-icon" style="font-size:1.5rem">✅</span>
+                <h3 id="done-heading">Conversion Complete!</h3>
             </div>
             <p class="done-subtitle" id="done-subtitle"></p>
+            <div class="link-warning-box" id="link-warning-box">
+                <strong>⚠ Link warning:</strong> <span id="link-warning-text"></span>
+                Some internal links in the EPUB may not work. The file is still downloadable.
+            </div>
             <div class="done-actions">
                 <a id="btn-dl-epub" href="#" class="btn-dl-epub">⬇ Download EPUB</a>
                 <button class="btn-another" onclick="resetToUpload()">Convert another file</button>
@@ -263,32 +281,36 @@
     </main>
 
     <script>
-        const TOTAL_STEPS = 5;
+        const TOTAL_STEPS = 6;
 
-        const fileInput = document.getElementById('file-input');
-        const uploadSection = document.getElementById('upload-section');
-        const confirmSection = document.getElementById('confirm-section');
+        const fileInput       = document.getElementById('file-input');
+        const uploadSection   = document.getElementById('upload-section');
+        const confirmSection  = document.getElementById('confirm-section');
         const confirmFilename = document.getElementById('confirm-filename');
-        const confirmStart = document.getElementById('confirm-start');
-        const confirmCancel = document.getElementById('confirm-cancel');
+        const confirmStart    = document.getElementById('confirm-start');
+        const confirmCancel   = document.getElementById('confirm-cancel');
         const progressSection = document.getElementById('progress-section');
-        const stepsDiv = document.getElementById('steps');
-        const progressBar = document.getElementById('progress-bar');
-        const convertingName = document.getElementById('converting-name');
-        const doneSection = document.getElementById('done-section');
-        const doneSubtitle = document.getElementById('done-subtitle');
-        const btnDlEpub = document.getElementById('btn-dl-epub');
+        const stepsDiv        = document.getElementById('steps');
+        const progressBar     = document.getElementById('progress-bar');
+        const convertingName  = document.getElementById('converting-name');
+        const doneSection     = document.getElementById('done-section');
+        const doneSubtitle    = document.getElementById('done-subtitle');
+        const doneIcon        = document.getElementById('done-icon');
+        const doneHeading     = document.getElementById('done-heading');
+        const btnDlEpub       = document.getElementById('btn-dl-epub');
+        const linkWarningBox  = document.getElementById('link-warning-box');
+        const linkWarningText = document.getElementById('link-warning-text');
 
         let pendingFilename = null;
         let elapsedTimer = null;
         let stepStartTime = null;
         const stepDivs = {};
         let lastRenderedSteps = 0;
+        let hadLinkWarning = false;
 
         fileInput.addEventListener('change', () => {
             if (fileInput.files[0]) uploadFile(fileInput.files[0]);
         });
-
         confirmStart.addEventListener('click', () => {
             if (pendingFilename) startConversion(pendingFilename);
         });
@@ -307,7 +329,10 @@
             pendingFilename = null;
             fileInput.value = '';
             stepsDiv.innerHTML = '';
+            linkWarningBox.style.display = 'none';
             Object.keys(stepDivs).forEach(k => delete stepDivs[k]);
+            lastRenderedSteps = 0;
+            hadLinkWarning = false;
         }
 
         async function uploadFile(file) {
@@ -338,6 +363,7 @@
             stepsDiv.innerHTML = '';
             progressBar.value = 0;
             lastRenderedSteps = 0;
+            hadLinkWarning = false;
             Object.keys(stepDivs).forEach(k => delete stepDivs[k]);
 
             let jobId;
@@ -367,7 +393,9 @@
 
                     for (let i = lastRenderedSteps; i < data.steps.length; i++) {
                         const s = data.steps[i];
+
                         if (s.step === 'done') {
+                            // Mark active step as done
                             Object.values(stepDivs).forEach(d => {
                                 if (d.dataset.status === 'active') {
                                     d.dataset.status = 'done';
@@ -387,26 +415,50 @@
                                 progressSection.style.display = 'none';
                                 doneSubtitle.textContent = epubFilename + ' (' + fileSize + ')';
                                 btnDlEpub.href = '/download/' + encodeURIComponent(epubFilename);
+
+                                if (hadLinkWarning) {
+                                    doneIcon.textContent = '⚠️';
+                                    doneHeading.textContent = 'Conversion Complete (with warnings)';
+                                    doneHeading.style.color = '#e65100';
+                                    linkWarningBox.style.display = 'block';
+                                } else {
+                                    doneIcon.textContent = '✅';
+                                    doneHeading.textContent = 'Conversion Complete!';
+                                    doneHeading.style.color = '#2e7d32';
+                                    linkWarningBox.style.display = 'none';
+                                }
                                 doneSection.style.display = 'block';
                             }, 800);
                             return;
+
                         } else {
                             const stepNum = s.step;
+                            const isWarning = s.warning === true;
+                            if (isWarning) hadLinkWarning = true;
+
+                            const finalStatus = isWarning ? 'warning' : 'done';
+
                             if (stepDivs[stepNum]) {
                                 stopElapsedTimer();
                                 const div = stepDivs[stepNum];
-                                div.dataset.status = 'done';
+                                div.dataset.status = finalStatus;
                                 const el = div.querySelector('.elapsed');
                                 if (el) el.remove();
                                 div.childNodes[0].textContent = 'Step ' + stepNum + '/' + TOTAL_STEPS + ': ' + s.message;
                             } else {
                                 const div = document.createElement('div');
                                 div.className = 'step';
-                                div.dataset.status = 'done';
+                                div.dataset.status = finalStatus;
                                 div.textContent = 'Step ' + stepNum + '/' + TOTAL_STEPS + ': ' + s.message;
                                 stepDivs[stepNum] = div;
                                 stepsDiv.appendChild(div);
                             }
+
+                            // Populate the warning detail box
+                            if (isWarning) {
+                                linkWarningText.textContent = s.message + ' ';
+                            }
+
                             progressBar.value = stepNum;
                         }
                     }
@@ -429,7 +481,7 @@
                         stopElapsedTimer();
                         addStep('error', data.error, 'error');
                         clearInterval(poller);
-                        setTimeout(() => { resetToUpload(); }, 5000);
+                        setTimeout(() => { resetToUpload(); }, 6000);
                     }
                 } catch (err) {
                     // network error — keep polling
