@@ -3,12 +3,11 @@
 ACSM to EPUB Converter
 
 Converts Adobe ACSM ebook tokens to DRM-free EPUB files
-for personal offline reading.
+for personal offline reading. Only supports EPUB-sourced ACSM files.
 
 Prerequisites (installed automatically by setup):
     brew install pugixml libzip openssl curl cmake
     libgourou (built from source)
-    Calibre (brew install --cask calibre)
 
 Usage:
     python3 converter.py --setup          # First-time setup
@@ -30,19 +29,10 @@ ADEPT_DIR = Path.home() / ".config" / "adept"
 
 
 def run(cmd, **kwargs):
-    """Run a command and return the result, printing errors on failure."""
+    """Run a command and return the result."""
     defaults = {"capture_output": True, "text": True}
     defaults.update(kwargs)
     return subprocess.run(cmd, **defaults)
-
-
-def check_command(name):
-    """Check if a CLI command is available in PATH or local build."""
-    # Check local libgourou build first
-    local = LIBGOUROU_BIN / name
-    if local.exists() and os.access(local, os.X_OK):
-        return str(local)
-    return shutil.which(name)
 
 
 def find_tool(name):
@@ -88,8 +78,6 @@ def _patch_makefiles(brew_prefixes):
     include_flags = " ".join(f"-I{p}/include" for p in brew_prefixes.values())
     lib_flags = " ".join(f"-L{p}/lib" for p in brew_prefixes.values())
 
-    # Patch root Makefile for macOS:
-    # 1. Replace ar --thin (not supported) with libtool -static (handles archive merging)
     root_mk = LIBGOUROU_DIR / "Makefile"
     content = root_mk.read_text()
     content = content.replace(
@@ -98,15 +86,12 @@ def _patch_makefiles(brew_prefixes):
     )
     root_mk.write_text(content)
 
-    # Patch utils Makefile: add Homebrew include/lib paths
     utils_mk = LIBGOUROU_DIR / "utils" / "Makefile"
     content = utils_mk.read_text()
-    # Add brew include paths to CXXFLAGS
     content = content.replace(
         "CXXFLAGS=-Wall -fPIC -I$(ROOT)/include",
         f"CXXFLAGS=-Wall -fPIC -I$(ROOT)/include {include_flags}",
     )
-    # Add brew lib paths to LDFLAGS
     content = content.replace(
         "LDFLAGS += -L$(ROOT) -lcrypto",
         f"LDFLAGS += -L$(ROOT) {lib_flags} -lcrypto",
@@ -149,7 +134,6 @@ def build_libgourou():
         print("\nTry installing missing deps: brew install pugixml libzip openssl curl")
         sys.exit(1)
 
-    # Verify build
     if not (LIBGOUROU_BIN / "acsmdownloader").exists():
         print("Build completed but binaries not found.")
         print(f"Check {LIBGOUROU_BIN} for build output.")
@@ -158,35 +142,12 @@ def build_libgourou():
     print("[OK] libgourou built successfully.")
 
 
-def setup_calibre():
-    """Ensure Calibre is installed."""
-    if shutil.which("ebook-convert"):
-        print("[OK] Calibre already installed.")
-        return
-
-    # Check common macOS Calibre locations
-    calibre_convert = "/Applications/calibre.app/Contents/MacOS/ebook-convert"
-    if Path(calibre_convert).exists():
-        print("[OK] Calibre found at /Applications/calibre.app")
-        return
-
-    print("Installing Calibre...")
-    result = run(["brew", "install", "--cask", "calibre"])
-    if result.returncode != 0:
-        print(f"Calibre installation failed:\n{result.stderr}")
-        print("You can install manually from https://calibre-ebook.com/download")
-        sys.exit(1)
-    print("[OK] Calibre installed.")
-
-
 def do_setup():
     """Run full first-time setup."""
     print("=== Setting up ACSM Converter ===\n")
     setup_brew_deps()
     print()
     build_libgourou()
-    print()
-    setup_calibre()
     print("\n=== Setup complete! ===")
     print("You can now convert ACSM files:")
     print("  python3 converter.py ebook.acsm")
@@ -195,43 +156,8 @@ def do_setup():
 # ─── Conversion ──────────────────────────────────────────────────────────
 
 
-def find_ebook_convert():
-    """Find ebook-convert from Calibre."""
-    # Check PATH
-    cmd = shutil.which("ebook-convert")
-    if cmd:
-        return cmd
-    # Check macOS app bundle
-    app_cmd = "/Applications/calibre.app/Contents/MacOS/ebook-convert"
-    if Path(app_cmd).exists():
-        return app_cmd
-    return None
-
-
-def check_ready():
-    """Verify all tools are available."""
-    problems = []
-
-    if not find_tool("acsmdownloader"):
-        problems.append("libgourou not built (run: python3 converter.py --setup)")
-    if not find_tool("adept_activate"):
-        problems.append("libgourou not built (run: python3 converter.py --setup)")
-    if not find_tool("adept_remove"):
-        problems.append("libgourou not built (run: python3 converter.py --setup)")
-    if not find_ebook_convert():
-        problems.append("Calibre not installed (run: python3 converter.py --setup)")
-
-    if problems:
-        print("Not ready. Missing components:")
-        for p in set(problems):
-            print(f"  - {p}")
-        sys.exit(1)
-
-    print("[OK] All tools ready.")
-
-
 def detect_format(acsm_path):
-    """Parse the ACSM file to detect if the download is EPUB or PDF."""
+    """Parse the ACSM file and raise an error if it is not EPUB."""
     tree = ET.parse(acsm_path)
     root = tree.getroot()
     ns = {"adept": "http://ns.adobe.com/adept"}
@@ -240,11 +166,13 @@ def detect_format(acsm_path):
     if src_elem is not None and src_elem.text:
         src = src_elem.text.lower()
         if ".pdf" in src or "output=pdf" in src:
-            return "pdf"
-        if ".epub" in src or "output=epub" in src:
-            return "epub"
+            raise RuntimeError(
+                "This ACSM file points to a PDF ebook. "
+                "Only EPUB-sourced ACSM files are supported."
+            )
 
-    return "pdf"
+    # Treat unknown/missing src as EPUB (most common case)
+    return "epub"
 
 
 def register_device():
@@ -267,7 +195,7 @@ def register_device():
 
 
 def fulfill_acsm(acsm_path, output_path):
-    """Download the DRM-protected ebook by fulfilling the ACSM token."""
+    """Download the DRM-protected EPUB by fulfilling the ACSM token."""
     print(f"Fulfilling ACSM: {acsm_path.name}")
     tool = find_tool("acsmdownloader")
     try:
@@ -276,7 +204,6 @@ def fulfill_acsm(acsm_path, output_path):
         raise RuntimeError("Download timed out (120s). The ACSM token may be expired or the server is unreachable.")
     if result.returncode != 0:
         stderr = result.stderr or result.stdout or ""
-        print(f"ACSM fulfillment failed:\n{stderr}", flush=True)
         raise RuntimeError(f"ACSM download failed (exit code {result.returncode}): {stderr[:500]}")
 
     if not output_path.exists():
@@ -287,7 +214,7 @@ def fulfill_acsm(acsm_path, output_path):
 
 
 def remove_drm(input_path, output_path):
-    """Remove DRM from the downloaded ebook."""
+    """Remove DRM from the downloaded EPUB."""
     print(f"Removing DRM: {input_path.name}")
     tool = find_tool("adept_remove")
     try:
@@ -300,39 +227,18 @@ def remove_drm(input_path, output_path):
     print(f"[OK] DRM removed: {output_path.name}")
 
 
-def convert_to_epub(input_path, output_path):
-    """Convert PDF to EPUB using Calibre."""
-    print(f"Converting: {input_path.suffix} -> .epub")
-    tool = find_ebook_convert()
-    if not tool:
-        raise RuntimeError("Calibre ebook-convert not found. Cannot convert PDF to EPUB.")
-    try:
-        result = run([tool, str(input_path), str(output_path)], timeout=600)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("PDF to EPUB conversion timed out (600s).")
-    if result.returncode != 0:
-        raise RuntimeError(f"PDF to EPUB conversion failed: {(result.stderr or result.stdout)[:300]}")
-    if not output_path.exists():
-        raise RuntimeError("Conversion completed but EPUB file not found.")
-    print(f"[OK] Converted: {output_path.name}")
-
-
 def convert_pipeline(acsm_path, output_dir):
     """Generator that yields (step, message) tuples for each conversion step.
 
     Used by both the CLI (do_convert) and the web interface (app.py).
-    Raises RuntimeError on failure instead of calling sys.exit.
-
-    Always produces an EPUB file. If the native format is PDF,
-    an extra step converts PDF to EPUB using Calibre.
+    Raises RuntimeError on failure.
 
     Steps:
       1. Check tools
-      2. Detect format
+      2. Detect format (EPUB only — raises if PDF)
       3. Register Adobe device
-      4. Download ebook
+      4. Download EPUB
       5. Remove DRM
-      6. Convert to EPUB (only if native format is PDF; skipped if already EPUB)
     """
     acsm_path = Path(acsm_path).resolve()
     if not acsm_path.exists():
@@ -347,52 +253,37 @@ def convert_pipeline(acsm_path, output_dir):
     # Step 1: Check tools
     problems = []
     if not find_tool("acsmdownloader"):
-        problems.append("libgourou not built (run: python3 converter.py --setup)")
+        problems.append("acsmdownloader not found (run: python3 converter.py --setup)")
     if not find_tool("adept_activate"):
-        problems.append("libgourou not built (run: python3 converter.py --setup)")
+        problems.append("adept_activate not found (run: python3 converter.py --setup)")
     if not find_tool("adept_remove"):
-        problems.append("libgourou not built (run: python3 converter.py --setup)")
+        problems.append("adept_remove not found (run: python3 converter.py --setup)")
     if problems:
         raise RuntimeError("Missing components: " + "; ".join(set(problems)))
     yield (1, "All tools ready.")
 
-    # Step 2: Detect format
-    fmt = detect_format(acsm_path)
-    needs_conversion = (fmt == "pdf")
-    if needs_conversion:
-        yield (2, f"Detected format: PDF (will convert to EPUB)")
-    else:
-        yield (2, f"Detected format: EPUB")
+    # Step 2: Detect format — raises if not EPUB
+    detect_format(acsm_path)
+    yield (2, "Detected format: EPUB")
 
     # Step 3: Register device
     register_device()
     yield (3, "Device registered.")
 
     # Step 4: Download
-    drm_file = output_dir / f"{stem}_drm.{fmt}"
+    drm_file = output_dir / f"{stem}_drm.epub"
     fulfill_acsm(acsm_path, drm_file)
     yield (4, f"Downloaded: {drm_file.name}")
 
     # Step 5: Remove DRM
-    clean_file = output_dir / f"{stem}.{fmt}"
-    remove_drm(drm_file, clean_file)
+    epub_file = output_dir / f"{stem}.epub"
+    remove_drm(drm_file, epub_file)
     drm_file.unlink()
-    yield (5, f"DRM removed: {clean_file.name}")
-
-    # Step 6: Convert to EPUB if needed
-    if needs_conversion:
-        epub_file = output_dir / f"{stem}.epub"
-        convert_to_epub(clean_file, epub_file)
-        # Remove the intermediate PDF
-        clean_file.unlink()
-        clean_file = epub_file
-        yield (6, f"Converted to EPUB: {epub_file.name}")
-    else:
-        yield (6, "Already EPUB, no conversion needed.")
+    yield (5, f"DRM removed: {epub_file.name}")
 
     # Done
-    size_mb = clean_file.stat().st_size / (1024 * 1024) if clean_file.exists() else 0
-    yield ("done", f"{clean_file.name}|{size_mb:.1f} MB")
+    size_mb = epub_file.stat().st_size / (1024 * 1024) if epub_file.exists() else 0
+    yield ("done", f"{epub_file.name}|{size_mb:.1f} MB")
 
 
 def do_convert(acsm_file, output_dir):
@@ -403,7 +294,7 @@ def do_convert(acsm_file, output_dir):
                 parts = message.split("|")
                 print(f"\n=== Done! ===\nFile: {parts[0]} ({parts[1]})")
             else:
-                print(f"\n=== Step {step}/6: {message} ===")
+                print(f"\n=== Step {step}/5: {message} ===")
     except RuntimeError as e:
         print(str(e))
         sys.exit(1)
@@ -411,7 +302,7 @@ def do_convert(acsm_file, output_dir):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert ACSM ebook tokens to DRM-free EPUB.",
+        description="Convert EPUB-sourced ACSM ebook tokens to DRM-free EPUB.",
         epilog="First run: python3 converter.py --setup",
     )
     parser.add_argument(

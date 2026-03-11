@@ -1,10 +1,9 @@
 FROM python:3.11-slim
 
-# Install build dependencies for libgourou + Calibre
+# Install build dependencies for libgourou
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git cmake make g++ \
     libpugixml-dev libzip-dev libssl-dev libcurl4-openssl-dev \
-    calibre \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Flask web interface for the ACSM to EPUB converter."""
+"""Flask web interface for the ACSM to EPUB converter (EPUB sources only)."""
 
 import json
 import os
-import subprocess
 import threading
 import time
 import zipfile
@@ -12,9 +11,9 @@ from collections import OrderedDict
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, make_response, render_template, request, send_from_directory, session, redirect, url_for
+from flask import Flask, jsonify, make_response, render_template, request, send_from_directory, session, redirect, url_for
 
-from converter import convert_pipeline, find_ebook_convert
+from converter import convert_pipeline
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24).hex())
@@ -30,13 +29,14 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 COVER_DIR.mkdir(exist_ok=True)
 
+TOTAL_STEPS = 5
+
 STEP_LABELS = {
     1: "Checking tools...",
     2: "Detecting format...",
     3: "Registering Adobe device...",
-    4: "Downloading ebook...",
+    4: "Downloading EPUB...",
     5: "Removing DRM...",
-    6: "Converting to EPUB...",
 }
 
 # Track active conversions: job_id -> {steps: [...], status, error}
@@ -91,11 +91,7 @@ def extract_epub_cover(epub_path):
 
 
 def _find_cover_in_opf(zf):
-    opf_path = None
-    for name in zf.namelist():
-        if name.endswith(".opf"):
-            opf_path = name
-            break
+    opf_path = next((n for n in zf.namelist() if n.endswith(".opf")), None)
     if not opf_path:
         return None
     opf_xml = zf.read(opf_path).decode("utf-8", errors="replace")
@@ -146,7 +142,7 @@ def get_books():
             books[stem]["files"].append({
                 "name": f.name,
                 "size": f"{size_mb:.1f} MB",
-                "ext": f.suffix[1:].upper(),
+                "ext": "EPUB",
             })
             if not books[stem]["cover"]:
                 cover = extract_epub_cover(f)
@@ -159,7 +155,6 @@ def run_conversion_job(job_id, acsm_path, output_dir):
     """Run conversion in a background thread, updating active_jobs."""
     import traceback
     job = active_jobs[job_id]
-    total = 6
     print(f"[DEBUG] Job {job_id} started: acsm={acsm_path}, output={output_dir}", flush=True)
     try:
         job["current_step"] = 1
@@ -175,7 +170,7 @@ def run_conversion_job(job_id, acsm_path, output_dir):
                 step_num = int(step)
                 job["steps"].append({"step": step_num, "message": message})
                 next_step = step_num + 1
-                if next_step <= total:
+                if next_step <= TOTAL_STEPS:
                     job["current_step"] = next_step
                     job["current_label"] = STEP_LABELS[next_step]
     except RuntimeError as e:
